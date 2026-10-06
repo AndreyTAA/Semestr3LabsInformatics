@@ -1,88 +1,117 @@
 #ifndef HOMEWORK1_WEAKPTR_H
 #define HOMEWORK1_WEAKPTR_H
 
-
+#include <cstddef>
+#include <utility>
 #include "ShrdPtr.h"
 #include "ControlBlock.h"
 
-template <typename T>
+template<typename T>
 class WeakPtr {
+private:
     ControlBlock* block_;
 public:
-    WeakPtr(): block_(nullptr){}
+    WeakPtr() ;
 
-    WeakPtr(const ShrdPtr<T>& s): block_(s.block_) {
-        if (block_) block_->incWeak();
-    }
+    WeakPtr(const ShrdPtr<T>& s);
+    WeakPtr(const WeakPtr& other);
+    WeakPtr(WeakPtr&& other) noexcept;
 
-    WeakPtr(const WeakPtr<T>& other): block_(other.block_) {
-        if (block_) block_->incWeak();
-    }
+    WeakPtr& operator=(const WeakPtr& other);
+    WeakPtr& operator=(WeakPtr&& other) noexcept;
+    WeakPtr& operator=(const ShrdPtr<T>& s);
 
-    WeakPtr(WeakPtr<T>&& other) noexcept : block_(other.block_) {
-        other.block_ = nullptr;
-    }
+    ~WeakPtr();
 
-    WeakPtr& operator=(const WeakPtr& other) {
+    bool expired() const;
+    ShrdPtr<T> lock() const;
+    size_t use_count() const;
+
+    void reset();
+    void swap(WeakPtr& other) ;
+};
+
+template<typename T>
+WeakPtr<T>::WeakPtr()  : block_(nullptr) {}
+
+template<typename T>
+WeakPtr<T>::WeakPtr(const ShrdPtr<T>& s) : block_(s.block_) {
+    if (block_) block_->incWeak();
+}
+
+template<typename T>
+WeakPtr<T>::WeakPtr(const WeakPtr& other) : block_(other.block_) {
+    if (block_) block_->incWeak();
+}
+
+template<typename T>
+WeakPtr<T>::WeakPtr(WeakPtr&& other) noexcept : block_(other.block_) {
+    other.block_ = nullptr;
+}
+
+template<typename T>
+WeakPtr<T>& WeakPtr<T>::operator=(const WeakPtr& other) {
+    if (this != &other) {
         WeakPtr tmp(other);
         swap(tmp);
-        return *this;
     }
+    return *this;
+}
 
-    WeakPtr& operator=(WeakPtr&& other) noexcept {
-        if (this != &other) {
-            if (block_) block_->decWeak();   // ← отпускаем старый блок
-            block_ = other.block_;           // ← забираем новый
-            other.block_ = nullptr;
-        }
-        return *this;
-    }
-
-    WeakPtr& operator=(const ShrdPtr<T>& s) {
-        if (block_ == s.block_) return *this;
+template<typename T>
+WeakPtr<T>& WeakPtr<T>::operator=(WeakPtr&& other) noexcept {
+    if (this != &other) {
         if (block_) block_->decWeak();
-        block_ = s.block_;
-        if (block_) block_->incWeak();
-        return *this;
+        block_ = other.block_;
+        other.block_ = nullptr;
     }
+    return *this;
+}
 
-    ~WeakPtr() {
-        if (block_ != nullptr) {
-            block_->decWeak();
-        }
-    }
+template<typename T>
+WeakPtr<T>& WeakPtr<T>::operator=(const ShrdPtr<T>& s) {
+    if (block_ == s.block_) return *this;
+    if (block_) block_->decWeak();
+    block_ = s.block_;
+    if (block_) block_->incWeak();
+    return *this;
+}
 
-    bool expired() const {
-        return block_==nullptr || block_->expired();
-    }
+template<typename T>
+WeakPtr<T>::~WeakPtr() {
+    if (block_) block_->decWeak();
+}
 
-    ShrdPtr<T> lock() const {
-        if (expired()) {
-            return ShrdPtr<T>();
-        }
-        else {
-            block_->incStrong();
-            return ShrdPtr<T>(block_);
-        }
-    }
+template<typename T>
+bool WeakPtr<T>::expired() const {
+    return block_ == nullptr || block_->expired();
+}
 
-    size_t use_count() const {
-        if (block_) {
-            return block_->useCount();
-        }
-        return 0;
+template<typename T>
+ShrdPtr<T> WeakPtr<T>::lock() const {
+    if (expired()) {
+        return ShrdPtr<T>();
     }
+    block_->incStrong();
+    return ShrdPtr<T>(block_);
+}
 
-    void reset() {
-        if (block_) {
-            block_->decWeak();
-            block_= nullptr;
-        }
-    }
+template<typename T>
+size_t WeakPtr<T>::use_count() const {
+    return block_ ? block_->useCount() : 0;
+}
 
-    void swap(WeakPtr& other) {
-        std::swap(block_, other.block_);
+template<typename T>
+void WeakPtr<T>::reset() {
+    if (block_) {
+        block_->decWeak();
+        block_ = nullptr;
     }
-};
+}
+
+template<typename T>
+void WeakPtr<T>::swap(WeakPtr& other)  {
+    std::swap(block_, other.block_);
+}
 
 #endif // HOMEWORK1_WEAKPTR_H
